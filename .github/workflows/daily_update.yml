@@ -1,0 +1,47 @@
+STREAMING_CHUNK: Creating daily scheduler execution trigger
+
+name: Daily Job Aggregator & Publisher
+
+on:
+schedule:
+# Triggers every day at 07:00 UTC (02:00 AM Central Time)
+- cron: '0 7 * * *'
+workflow_dispatch: # Allows manual trigger directly from Github interface
+
+permissions:
+contents: write
+
+jobs:
+build:
+runs-on: ubuntu-latest
+
+steps:
+# STREAMING_CHUNK: Setting up runner, Python, and caching dependencies
+- name: Checkout Repository Code
+  uses: actions/checkout@v3
+
+- name: Setup Python Runtime Environment
+  uses: actions/checkout@v3
+  with:
+    python-version: '3.10'
+
+- name: Install System Dependencies
+  run: |
+    python -m pip install --upgrade pip
+    pip install requests google-generativeai
+
+# STREAMING_CHUNK: Running Python job compiler and auto-committing modifications
+- name: Run Job Compiler
+  env:
+    # Secure credentials bound in repository settings
+    GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  run: python update_jobs.py
+
+- name: Commit Updated Listings and Seen Registry
+  run: |
+    git config --global user.name "Github Automation Runner"
+    git config --global user.email "runner@github.com"
+    git add jobs.json jobs_history.json
+    # Commit will only happen if there are dynamic file edits today
+    git diff-index --quiet HEAD || git commit -m "Automated Sync: Update daily job listings" -a
+    git push
