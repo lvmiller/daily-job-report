@@ -1,47 +1,45 @@
-STREAMING_CHUNK: Configures GitHub Actions daily workflow script scheduler
-
 name: Daily Job Aggregator & Publisher
 
 on:
-schedule:
-# Triggers every day at 07:00 UTC (02:00 AM Central Time)
-- cron: '0 7 * * *'
-workflow_dispatch: # Allows manual run trigger
+  schedule:
+    # Triggers every day at 07:00 UTC (02:00 AM Central Time)
+    - cron: '0 7 * * *'
+  workflow_dispatch:
 
 permissions:
-contents: write
+  contents: write
 
 jobs:
-build:
-runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
-steps:
-- name: Checkout Repository Code
-  uses: actions/checkout@v3
+    steps:
+      - name: Checkout Repository Code
+        uses: actions/checkout@v4
 
-# STREAMING_CHUNK: Setting up the Python runtime environment
-- name: Setup Python Runtime Environment
-  uses: actions/setup-python@v4
-  with:
-    python-version: '3.10'
+      - name: Setup Python Runtime Environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-# STREAMING_CHUNK: Upgrading pip and installing google-genai
-- name: Install System Dependencies
-  run: |
-    python -m pip install --upgrade pip
-    pip install google-genai
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install google-genai
 
-# STREAMING_CHUNK: Executing the real-world search grounded script
-- name: Run Job Compiler
-  env:
-    GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-  run: python update_jobs.py
+      - name: Run Job Compiler
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python update_jobs.py
 
-# STREAMING_CHUNK: Auto committing and pushing database modifications
-- name: Commit Updated Listings and Seen Registry
-  run: |
-    git config --global user.name "Github Automation Runner"
-    git config --global user.email "runner@github.com"
-    git add jobs.json jobs_history.json
-    git diff-index --quiet HEAD || git commit -m "Automated Sync: Compile daily real job listings" -a
-    git push
+      - name: Commit Updated Listings and Seen Registry
+        run: |
+          git config user.name "GitHub Automation Runner"
+          git config user.email "runner@github.com"
+          git add jobs.json jobs_history.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Automated Sync: Compile daily real job listings"
+            git push
+          else
+            echo "No listing changes to commit."
+          fi

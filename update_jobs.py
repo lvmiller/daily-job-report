@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import hashlib
 import datetime
@@ -54,7 +55,7 @@ def main():
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         print("Error: GEMINI_API_KEY environment variable is missing. Halting execution.")
-        return
+        return 1
 
     client = genai.Client(api_key=api_key)
 
@@ -72,7 +73,7 @@ def main():
         print("Successfully obtained grounded search information. Now parsing to JSON...")
     except Exception as e:
         print(f"Exception triggered during search execution: {e}")
-        return
+        return 1
 
     try:
         structuring_prompt = f"""
@@ -96,7 +97,7 @@ def main():
         print(f"Discovered {len(parsed_results)} matching jobs in current cycle.")
     except Exception as e:
         print(f"Exception encountered during structured JSON extraction: {e}")
-        return
+        return 1
 
     seen_history = set()
     if os.path.exists(HISTORY_FILE_PATH):
@@ -132,6 +133,7 @@ def main():
     with open(HISTORY_FILE_PATH, 'w') as f:
         json.dump(list(seen_history), f, indent=4)
     print("Historical registry successfully saved.")
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
