@@ -1,170 +1,137 @@
 import os
 import json
-import requests
+import hashlib
 import datetime
-from google.generativeai import configure, GenerativeModel
+from google import genai
+from google.genai import types
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 JOBS_FILE_PATH = "jobs.json"
-HISTORY_FILE_PATH = "jobs_history.json" # To keep track of previously imported IDs to skip them in new reports
+HISTORY_FILE_PATH = "jobs_history.json"
 
-# Search params set by user
-CRITERIA = {
-    "target_salary": 105000,
-    "max_distance_miles": 20,
-    "center_location": "Conroe, TX",
-    "fields": ["Manufacturing", "Automotive", "Aerospace", "Chemical", "Medical", "Pharma"],
-    "keywords": ["Quality Engineer", "Quality Supervisor", "Quality Assurance Manager", "QC Supervisor", "Validation Engineer"]
+SEARCH_PROMPT = """
+Search Google for active, actual job listings posted recently (ideally within the last 14 days) matching these criteria:
+- Titles: Quality Engineer, Senior Quality Engineer, Quality Supervisor, QC Supervisor, Quality Assurance Manager, Validation Engineer, or similar roles.
+- Locations: Must be located within 20 miles of Conroe, TX (including nearby towns like The Woodlands, Spring, Montgomery, Huntsville) OR be fully Remote.
+- Salary: Base compensation should be estimated or stated at $105,000 USD or more per year. (If not explicitly listed in the posting, make an intelligent estimation based on company size, job seniority, and standard regional or remote market averages).
+- Industry Fields: Manufacturing, Automotive, Aerospace, Chemical, Medical, or Pharma.
+
+Please locate real listings from job boards (such as LinkedIn, Indeed, ZipRecruiter, Glassdoor) or direct company career portals. 
+For each matching job, extract:
+1. Exact Job Title.
+2. Company Name.
+3. Specific Location (e.g., 'Conroe, TX' or 'Remote').
+4. A brief description (3-4 sentences detailing key tasks and requirements).
+5. Salary figure (estimated or listed base as an integer).
+6. Real source apply URL (avoid generic search landing pages, search for the direct job ID or listing link).
+"""
+
+PARSING_SCHEMA = {
+    "type": "ARRAY",
+    "description": "A structured array containing real job listings matching search guidelines.",
+    "items": {
+        "type": "OBJECT",
+        "properties": {
+            "title": {"type": "STRING", "description": "Exact job title of the listing."},
+            "company": {"type": "STRING", "description": "Company hiring for the position."},
+            "location": {"type": "STRING", "description": "Listing location, e.g., 'Conroe, TX', 'Spring, TX', 'Remote'."},
+            "type": {"type": "STRING", "description": "Must be exactly 'Remote' or 'Local'."},
+            "field": {"type": "STRING", "description": "Must be exactly one of: Manufacturing, Automotive, Aerospace, Chemical, Medical, Pharma."},
+            "salary": {"type": "INTEGER", "description": "Yearly base salary, estimated or listed (must be >= 105000)."},
+            "posted": {"type": "STRING", "description": "Estimated elapsed posting time, e.g., '1 day ago', '3 days ago', 'Yesterday'."},
+            "desc": {"type": "STRING", "description": "A highly readable, concise summary of duties and qualification mandates."},
+            "url": {"type": "STRING", "description": "A direct URL matching the specific post or career portal."}
+        },
+        "required": ["title", "company", "location", "type", "field", "salary", "posted", "desc", "url"]
+    }
 }
 
-def configure_gemini():
-    if not GEMINI_API_KEY:
-        print("Warning: GEMINI_API_KEY environment variable is empty. Evaluation will use local fallback heuristic.")
-        return None
-    configure(api_key=GEMINI_API_KEY)
-    return GenerativeModel("gemini-1.5-flash")
-
-def evaluate_job_with_ai(model, raw_job):
-    """
-    Sends the job detail payload to Gemini to parse location proximity, estimate unlisted salary, 
-    map to candidate industrial fields, and decide if it complies with the $105k+ criteria.
-    """
-    if not model:
-        # Simple heuristic fallback if API key is not present during build testing
-        salary_estimate = raw_job.get("salary", 110000)
-        return {
-            "eligible": True,
-            "estimated_salary": salary_estimate,
-            "field": "Manufacturing",
-            "explanation": "No API key config. Defaulted via heuristic."
-        }
-        
-    prompt = f"""
-    Analyze the following job description for a candidate looking for Quality Engineering/Supervisor roles.
-    
-    Target Criteria:
-    - Target Salary: >= $105,000 USD (Estimate based on job responsibilities, company reputation, and location if unstated).
-    - Location: Must be Remote or located within 20 miles of Conroe, TX.
-    - Fields of interest: Manufacturing, Automotive, Aerospace, Chemical, Medical, Pharma.
-
-    Job Details:
-    Title: {raw_job.get('title')}
-    Company: {raw_job.get('company')}
-    Location: {raw_job.get('location')}
-    Description: {raw_job.get('description')}
-    
-    Respond in STRICT JSON format with the following keys:
-    {{
-        "eligible": true or false,
-        "estimated_salary": integer value (your best estimation or the listed salary),
-        "field": "One of: Manufacturing, Automotive, Aerospace, Chemical, Medical, Pharma, or Other",
-        "explanation": "A one sentence explanation of why this job matches/fails the salary estimate and location criteria."
-    }}
-    """
-    
-    try:
-        response = model.generate_content(prompt)
-        text_response = response.text.strip()
-        # Clean markdown wrappers if returned
-        if text_response.startswith("```json"):
-            text_response = text_response.split("```json")[1].split("```")[0].strip()
-        elif text_response.startswith("```"):
-            text_response = text_response.split("```")[1].split("```")[0].strip()
-        return json.loads(text_response)
-    except Exception as e:
-        print(f"Error evaluating job with AI: {e}")
-        return {"eligible": False, "estimated_salary": 0, "field": "Other", "explanation": "Failed AI appraisal."}
-
-def fetch_jobs_from_feed():
-    """
-    In a live deployment, this queries active job feeds, boards, or RSS indices.
-    For this robust setup, we mock real-time API aggregation searching for Conroe, TX & remote criteria.
-    """
-    print("Initiating active aggregation on external job boards...")
-    
-    # Simulating new live listings that would be picked up today
-    live_feeds = [
-        {
-            "id": f"scraped_{datetime.date.today().strftime('%Y%m%d')}_01",
-            "title": "Senior Staff Quality Systems Specialist",
-            "company": "VaxMed Biologics",
-            "location": "Conroe, TX",
-            "description": "Evaluate non-conformances in a sterile vaccine manufacturing facility. Lead QA risk assessments. Requires 6+ years experience in FDA pharma environments.",
-            "posted": "6 hours ago"
-        },
-        {
-            "id": f"scraped_{datetime.date.today().strftime('%Y%m%d')}_02",
-            "title": "Lead Quality Engineer (Automotive Sensors)",
-            "company": "NextGen Powertrains",
-            "location": "Remote",
-            "description": "Own supply chain APQP/PPAP requirements for semiconductor sensor products. Experience with IATF 16949 core tools required. Salary range starting at $115,000.",
-            "posted": "12 hours ago"
-        },
-        {
-            "id": f"scraped_{datetime.date.today().strftime('%Y%m%d')}_03",
-            "title": "Junior QC Technician",
-            "company": "Conroe Machine Shop",
-            "location": "Conroe, TX",
-            "description": "Looking for entry-level inspector to assist on the manufacturing line. Pays $18/hr.",
-            "posted": "1 day ago" # Should fail evaluation on salary criteria
-        }
-    ]
-    return live_feeds
+def calculate_stable_id(job):
+    hash_payload = f"{job['company']}_{job['title']}_{job['url']}".encode('utf-8')
+    return hashlib.md5(hash_payload).hexdigest()
 
 def main():
-    model = configure_gemini()
-    
-    # Load previously seen history to ensure they never appear in the next release
+    print("Initiating Google GenAI client structure...")
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        print("Error: GEMINI_API_KEY environment variable is missing. Halting execution.")
+        return
+
+    client = genai.Client(api_key=api_key)
+
+    print("Executing Google Search Grounding to discover real openings...")
+    try:
+        search_response = client.models.generate_content(
+            model='gemini-3-flash-preview',
+            contents=SEARCH_PROMPT,
+            config=types.GenerateContentConfig(
+                tools=[types.Tool(google_search=types.GoogleSearch())],
+                temperature=0.2
+            )
+        )
+        raw_grounding_text = search_response.text
+        print("Successfully obtained grounded search information. Now parsing to JSON...")
+    except Exception as e:
+        print(f"Exception triggered during search execution: {e}")
+        return
+
+    try:
+        structuring_prompt = f"""
+        Extract and parse the following live search details into a completely valid JSON array matching the target schema.
+        Filter out any job entry that clearly does not match the geographic boundaries (must be Conroe area or Remote), target sectors, or the minimum $105,000 threshold.
+
+        Search Data:
+        {raw_grounding_text}
+        """
+
+        parse_response = client.models.generate_content(
+            model='gemini-3-flash-preview',
+            contents=structuring_prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=PARSING_SCHEMA,
+                temperature=0.1
+            )
+        )
+        parsed_results = json.loads(parse_response.text)
+        print(f"Discovered {len(parsed_results)} matching jobs in current cycle.")
+    except Exception as e:
+        print(f"Exception encountered during structured JSON extraction: {e}")
+        return
+
     seen_history = set()
     if os.path.exists(HISTORY_FILE_PATH):
         try:
             with open(HISTORY_FILE_PATH, 'r') as f:
                 seen_history = set(json.load(f))
         except Exception as e:
-            print(f"Could not load historical IDs: {e}")
+            print(f"Warning: Could not load history logs. Starting fresh: {e}")
 
-    raw_listings = fetch_jobs_from_feed()
-    new_compiled_jobs = []
-
-    for job in raw_listings:
-        # Ensure postings from previous reports are not included in the next release
-        if job["id"] in seen_history:
-            print(f"Skipping previously processed job: {job['title']} at {job['company']}")
+    final_output_list = []
+    for job in parsed_results:
+        job_id = calculate_stable_id(job)
+        if job_id in seen_history:
+            print(f"Skipping already compiled job: {job['title']} at {job['company']}")
             continue
-            
-        print(f"Evaluating fresh opportunity: {job['title']} - {job['company']}")
-        ai_assessment = evaluate_job_with_ai(model, job)
         
-        if ai_assessment.get("eligible") and ai_assessment.get("field") in CRITERIA["fields"]:
-            compiled_job = {
-                "id": job["id"],
-                "title": job["title"],
-                "company": job["company"],
-                "location": job["location"],
-                "type": "Remote" if "remote" in job["location"].lower() else "Local",
-                "field": ai_assessment["field"],
-                "salary": ai_assessment["estimated_salary"],
-                "posted": job["posted"],
-                "seen": False,
-                "desc": job["description"]
-            }
-            new_compiled_jobs.append(compiled_job)
-            seen_history.add(job["id"])
-            print(f"-> ACCEPTED match: {job['title']} (Est. Salary: ${compiled_job['salary']})")
-        else:
-            print(f"-> REJECTED match: {job['title']} - Reason: {ai_assessment.get('explanation', 'Not aligned.')}")
+        job['id'] = job_id
+        job['seen'] = False
+        final_output_list.append(job)
+        seen_history.add(job_id)
+        print(f"-> ACCEPTED match: {job['title']} - {job['company']} (${job['salary']}/yr)")
 
-    # Write accepted new matches to active jobs.json list for website consumption
-    if new_compiled_jobs:
+    if final_output_list:
         with open(JOBS_FILE_PATH, 'w') as f:
-            json.dump(new_compiled_jobs, f, indent=4)
-        print(f"Success! {len(new_compiled_jobs)} new listings published to active index.")
+            json.dump(final_output_list, f, indent=4)
+        print(f"Success! Saved {len(final_output_list)} actual, new listings to {JOBS_FILE_PATH}.")
     else:
-        print("No new eligible jobs matching criteria found in today's search cycles.")
+        # Save empty array so dashboard states respond accurately to empty cycles
+        with open(JOBS_FILE_PATH, 'w') as f:
+            json.dump([], f, indent=4)
+        print("No fresh opportunities matched the criteria in today's search window.")
 
-    # Persist all seen history back to the database tracking file
     with open(HISTORY_FILE_PATH, 'w') as f:
         json.dump(list(seen_history), f, indent=4)
+    print("Historical registry successfully saved.")
 
 if __name__ == "__main__":
     main()

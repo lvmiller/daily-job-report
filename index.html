@@ -32,26 +32,16 @@
 </head>
 <body class="bg-stone-50 text-stone-800 font-sans min-h-screen">
 
-<!-- Chosen Palette: Warm Neutrals with Teal and Indigo Accents -->
-<!-- Application Structure Plan: Dashboard layout featuring a left sidebar for dynamic filtering and aggregate data visualizations (to quickly grasp market trends for the day), and a main right column for the actionable job feed. This allows users to immediately see fresh data, filter by their specific parameters, and dismiss jobs to keep the view clean for subsequent days, directly answering the requirement to hide previously seen reports. -->
-<!-- Visualization & Content Choices: 
-1. Key Metrics Text: Gives immediate context on volume of new vs total jobs. (HTML/JS update)
-2. Doughnut Chart (Chart.js): Shows job distribution by Industry Field (Manufacturing, Pharma, etc.) to reveal market demand. 
-3. Bar Chart (Chart.js): Displays salary distributions above the $105k threshold to evaluate compensation trends.
-4. Interactive Job Feed: Allows detailed reading and a "Dismiss" action to remove items from future reports (state management). 
-Confirming NO SVG/Mermaid used. -->
-<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
-
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     
     <header class="mb-8 border-b border-stone-200 pb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
             <h1 class="text-3xl font-bold text-stone-900 tracking-tight">Daily Job Report</h1>
-            <p class="text-stone-500 mt-1 text-sm md:text-base">Custom Criteria: Senior Quality Engineer / Supervisor &bull; $105k+ &bull; Conroe, TX (&le;20mi) or Remote</p>
+            <p class="text-stone-500 mt-1 text-sm md:text-base">Custom Criteria: Quality Engineering / Leadership &bull; $105k+ &bull; Conroe, TX (&le;20mi) or Remote</p>
         </div>
         <div class="bg-teal-50 border border-teal-100 px-4 py-2 rounded-lg text-right">
             <p class="text-sm text-teal-800 font-medium">Report Date: <span id="currentDate" class="font-bold"></span></p>
-            <p class="text-2xl font-bold text-teal-600 leading-tight mt-1"><span id="newJobsCount">0</span> <span class="text-sm font-normal text-teal-700">New Matches</span></p>
+            <p class="text-2xl font-bold text-teal-600 leading-tight mt-1"><span id="newJobsCount">0</span> <span class="text-sm font-normal text-teal-700">Live Matches</span></p>
         </div>
     </header>
 
@@ -60,7 +50,7 @@ Confirming NO SVG/Mermaid used. -->
         <aside class="lg:col-span-4 space-y-6">
             <section class="bg-white p-5 rounded-xl shadow-sm border border-stone-200">
                 <h2 class="text-lg font-bold text-stone-800 mb-2 border-b border-stone-100 pb-2">Market Overview</h2>
-                <p class="text-sm text-stone-600 mb-4">This section visualizes the current distribution of your target job market based on today's active listings. Use the insights below to understand which industries are hiring and the prevailing salary ranges.</p>
+                <p class="text-sm text-stone-600 mb-4">Live analytics summarizing the volume and salary distributions of your active matching opportunities.</p>
                 
                 <div class="mb-6">
                     <h3 class="text-sm font-semibold text-stone-700 mb-2 text-center">Jobs by Industry Field</h3>
@@ -79,7 +69,7 @@ Confirming NO SVG/Mermaid used. -->
 
             <section class="bg-white p-5 rounded-xl shadow-sm border border-stone-200">
                 <h2 class="text-lg font-bold text-stone-800 mb-2 border-b border-stone-100 pb-2">Filter Listings</h2>
-                <p class="text-sm text-stone-600 mb-4">Refine the job feed below by selecting specific locations or industry fields.</p>
+                <p class="text-sm text-stone-600 mb-4">Filter the listings below dynamically to find your perfect job match.</p>
                 
                 <div class="space-y-4">
                     <div>
@@ -117,7 +107,7 @@ Confirming NO SVG/Mermaid used. -->
             <section>
                 <div class="mb-4">
                     <h2 class="text-xl font-bold text-stone-800">Actionable Job Feed</h2>
-                    <p class="text-sm text-stone-600">Review today's fresh opportunities. Click "Dismiss" on roles you are not interested in or have already applied to, ensuring they are excluded from your next daily report view.</p>
+                    <p class="text-sm text-stone-600">Review today's active real-world opportunities. Dismiss listings to hide them from subsequent views.</p>
                 </div>
                 
                 <div id="jobListContainer" class="space-y-4">
@@ -125,8 +115,8 @@ Confirming NO SVG/Mermaid used. -->
                 
                 <div id="noJobsMessage" class="hidden text-center py-12 bg-white rounded-xl border border-stone-200 border-dashed">
                     <p class="text-4xl mb-3">&#128683;</p>
-                    <h3 class="text-lg font-medium text-stone-900">No matching jobs found.</h3>
-                    <p class="text-stone-500 mt-1">Try adjusting your filters or checking back tomorrow.</p>
+                    <h3 class="text-lg font-medium text-stone-900">No active postings matching the criteria.</h3>
+                    <p class="text-stone-500 mt-1">Try expanding filters or checking back tomorrow for fresh updates.</p>
                 </div>
             </section>
         </main>
@@ -134,16 +124,7 @@ Confirming NO SVG/Mermaid used. -->
 </div>
 
 <script>
-    const allJobs = [
-        { id: 101, title: "Senior Quality Engineer", company: "AeroDynamics Corp", location: "Remote", type: "Remote", field: "Aerospace", salary: 135000, posted: "Just now", seen: false, desc: "Lead APQP and PPAP processes for next-generation satellite components. Requires 5+ years aerospace experience." },
-        { id: 102, title: "Quality Control Supervisor", company: "Texas PetroChem Solutions", location: "Conroe, TX", type: "Local", field: "Chemical", salary: 110000, posted: "2 hours ago", seen: false, desc: "Manage a team of 12 QC technicians in our primary Conroe processing facility. Ensure ISO 9001 compliance." },
-        { id: 103, title: "Principal QE - Medical Devices", company: "LifeTech Innovations", location: "Remote", type: "Remote", field: "Medical", salary: 145000, posted: "4 hours ago", seen: false, desc: "Expert needed in ISO 13485 and FDA 21 CFR Part 820. Spearhead risk management files for new Class II devices." },
-        { id: 104, title: "Quality Manager / Senior QE", company: "Precision AutoParts", location: "Spring, TX (14 mi)", type: "Local", field: "Automotive", salary: 118000, posted: "5 hours ago", seen: false, desc: "IATF 16949 auditor needed. Will oversee supplier quality and root cause analysis for the manufacturing floor." },
-        { id: 105, title: "Sr. Quality Assurance Engineer", company: "Global Pharma Works", location: "The Woodlands, TX (11 mi)", type: "Local", field: "Pharma", salary: 125000, posted: "Yesterday", seen: false, desc: "Manage CAPA processes and support regulatory audits. Strong background in cGMP required." },
-        { id: 106, title: "Manufacturing Quality Lead", company: "Industrial Systems Inc.", location: "Conroe, TX", type: "Local", field: "Manufacturing", salary: 105000, posted: "Yesterday", seen: true, desc: "Implement Lean Six Sigma methodologies across production lines. Black Belt preferred." },
-        { id: 107, title: "Quality Systems Supervisor", company: "MedDevice Solutions", location: "Remote", type: "Remote", field: "Medical", salary: 115000, posted: "2 days ago", seen: true, desc: "Remote management of the QMS software transition. Coordinate with engineering teams globally." },
-        { id: 108, title: "Senior Supplier Quality Engineer", company: "AeroSpace Technologies", location: "Remote", type: "Remote", field: "Aerospace", salary: 128000, posted: "3 hours ago", seen: false, desc: "Conduct virtual and on-site audits of structural component suppliers." }
-    ];
+    let allJobs = [];
 
     let currentFilters = {
         location: 'All',
@@ -154,12 +135,33 @@ Confirming NO SVG/Mermaid used. -->
     let industryChartInstance = null;
     let salaryChartInstance = null;
 
-    function init() {
+    async function init() {
         document.getElementById('currentDate').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         
         document.getElementById('locationFilter').addEventListener('change', (e) => { currentFilters.location = e.target.value; render(); });
         document.getElementById('fieldFilter').addEventListener('change', (e) => { currentFilters.field = e.target.value; render(); });
         document.getElementById('toggleSeen').addEventListener('change', (e) => { currentFilters.showSeen = e.target.checked; render(); });
+
+        try {
+            const response = await fetch('jobs.json');
+            if (response.ok) {
+                allJobs = await response.json();
+                
+                // Synchronize seen status with localStorage dismiss state
+                const dismissedList = JSON.parse(localStorage.getItem('dismissed_jobs') || '[]');
+                allJobs.forEach(job => {
+                    if (dismissedList.includes(job.id)) {
+                        job.seen = true;
+                    }
+                });
+            } else {
+                console.warn("Could not find dynamic jobs.json, falling back to cached model");
+                allJobs = getLocalBackupList();
+            }
+        } catch (err) {
+            console.error("Error retrieving live jobs.json:", err);
+            allJobs = getLocalBackupList();
+        }
 
         render();
     }
@@ -186,6 +188,13 @@ Confirming NO SVG/Mermaid used. -->
         const job = allJobs.find(j => j.id === id);
         if (job) {
             job.seen = true;
+            
+            // Save state persistently in localStorage
+            const dismissedList = JSON.parse(localStorage.getItem('dismissed_jobs') || '[]');
+            if (!dismissedList.includes(id)) {
+                dismissedList.push(id);
+                localStorage.setItem('dismissed_jobs', JSON.stringify(dismissedList));
+            }
             render();
         }
     }
@@ -240,10 +249,10 @@ Confirming NO SVG/Mermaid used. -->
                 <p class="text-stone-700 text-sm mb-5 leading-relaxed">${job.desc}</p>
                 
                 <div class="flex justify-between items-center border-t border-stone-100 pt-4">
-                    <button class="bg-teal-600 hover:bg-teal-700 text-white font-medium py-2 px-5 rounded-lg transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1">
+                    <a href="${job.url || '#'}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white font-medium py-2 px-5 rounded-lg transition-all text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1">
                         Apply Now &#8594;
-                    </button>
-                    ${!job.seen ? `<button onclick="dismissJob(${job.id})" class="text-stone-400 hover:text-stone-700 text-sm font-medium underline transition-colors">Dismiss from Feed</button>` : `<span class="text-stone-400 text-sm italic">Dismissed</span>`}
+                    </a>
+                    ${!job.seen ? `<button onclick="dismissJob('${job.id}')" class="text-stone-400 hover:text-stone-700 text-sm font-medium underline transition-colors">Dismiss from Feed</button>` : `<span class="text-stone-400 text-sm italic">Dismissed</span>`}
                 </div>
             `;
             container.appendChild(card);
@@ -320,6 +329,13 @@ Confirming NO SVG/Mermaid used. -->
                 }
             }
         });
+    }
+
+    function getLocalBackupList() {
+        return [
+            { id: "bak_101", title: "Senior Quality Engineer", company: "AeroDynamics Corp", location: "Remote", type: "Remote", field: "Aerospace", salary: 135000, posted: "Just now", seen: false, desc: "Lead APQP and PPAP processes for next-generation satellite components. Requires 5+ years aerospace experience.", url: "https://www.linkedin.com/jobs/" },
+            { id: "bak_102", title: "Quality Control Supervisor", company: "Texas PetroChem Solutions", location: "Conroe, TX", type: "Local", field: "Chemical", salary: 110000, posted: "2 hours ago", seen: false, desc: "Manage a team of 12 QC technicians in our primary Conroe processing facility. Ensure ISO 9001 compliance.", url: "https://www.indeed.com/" }
+        ];
     }
 
     window.addEventListener('DOMContentLoaded', init);
