@@ -2,12 +2,12 @@ import os
 import sys
 import json
 import hashlib
-import datetime
 from google import genai
 from google.genai import types
 
 JOBS_FILE_PATH = "jobs.json"
 HISTORY_FILE_PATH = "jobs_history.json"
+DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
 
 SEARCH_PROMPT = """
 Search Google for active, actual job listings posted recently (ideally within the last 14 days) matching these criteria:
@@ -50,6 +50,45 @@ def calculate_stable_id(job):
     hash_payload = f"{job['company']}_{job['title']}_{job['url']}".encode('utf-8')
     return hashlib.md5(hash_payload).hexdigest()
 
+def is_quota_exhausted(error):
+    if getattr(error, "code", None) in (429, "429"):
+        return True
+
+    error_text = " ".join(
+        str(part)
+        for part in (
+            getattr(error, "status", ""),
+            getattr(error, "message", ""),
+            getattr(error, "details", ""),
+            error,
+        )
+        if part
+    ).upper()
+
+    return (
+        "RESOURCE_EXHAUSTED" in error_text
+        or "TOOMANYREQUESTS" in error_text
+        or "TOO MANY REQUESTS" in error_text
+    )
+
+
+def handle_generation_exception(stage, error):
+    if is_quota_exhausted(error):
+        print(f"Gemini API quota/rate limit reached during {stage}.")
+        print(
+            f"Preserving existing {JOBS_FILE_PATH} and {HISTORY_FILE_PATH}; "
+            "no listing refresh was performed."
+        )
+        print(
+            "Resolve Gemini billing/quota or retry after quota resets to refresh "
+            "listings."
+        )
+        print(f"Original error: {error}")
+        return 0
+
+    print(f"Exception triggered during {stage}: {error}")
+    return 1
+
 def main():
     print("Initiating Google GenAI client structure...")
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -58,11 +97,13 @@ def main():
         return 1
 
     client = genai.Client(api_key=api_key)
+    model_name = os.environ.get("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL
+    print(f"Using Gemini model: {model_name}")
 
     print("Executing Google Search Grounding to discover real openings...")
     try:
         search_response = client.models.generate_content(
-            model='gemini-3-flash-preview',
+            model=model_name,
             contents=SEARCH_PROMPT,
             config=types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())],
@@ -72,8 +113,7 @@ def main():
         raw_grounding_text = search_response.text
         print("Successfully obtained grounded search information. Now parsing to JSON...")
     except Exception as e:
-        print(f"Exception triggered during search execution: {e}")
-        return 1
+        return handle_generation_exception("search execution", e)
 
     try:
         structuring_prompt = f"""
@@ -85,7 +125,7 @@ def main():
         """
 
         parse_response = client.models.generate_content(
-            model='gemini-3-flash-preview',
+            model=model_name,
             contents=structuring_prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -96,8 +136,7 @@ def main():
         parsed_results = json.loads(parse_response.text)
         print(f"Discovered {len(parsed_results)} matching jobs in current cycle.")
     except Exception as e:
-        print(f"Exception encountered during structured JSON extraction: {e}")
-        return 1
+        return handle_generation_exception("structured JSON extraction", e)
 
     seen_history = set()
     if os.path.exists(HISTORY_FILE_PATH):

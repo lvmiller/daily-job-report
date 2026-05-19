@@ -27,9 +27,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install google-genai
 
+      - name: Run Python Tests
+        run: python -m unittest -v
+
       - name: Run Job Compiler
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
         run: python update_jobs.py
 
       - name: Commit Updated Listings and Seen Registry
